@@ -20,7 +20,7 @@ fi
 script_dir=$(pwd)
 
 # Download the main script
-wget "https://github.com/8ByteSword/appimage-desktop-integrator/blob/main/install_appimages.sh" -O "$script_dir/install_appimages.sh"
+wget "https://github.com/8ByteSword/appimage-desktop-integrator/raw/main/install_appimages.sh" -O "$script_dir/install_appimages.sh"
 chmod +x "$script_dir/install_appimages.sh"
 
 # Check if config.ini already exists
