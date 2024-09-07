@@ -1,9 +1,27 @@
 #!/bin/bash
 
+curr_dir=$(pwd)
+
+# Find path of directory script is located
+script_path=${BASH_SOURCE[0]}
+while [ -L "$script_path" ]; do
+    script_dir=$( cd -P "$( dirname "$script_path" )" >/dev/null 2>&1 && pwd )
+    script_path=$(readlink "$script_path")
+    [[ $script_path != /* ]] && script_path=$script_dir/$script_path
+done
+script_dir=$( cd -P "$( dirname "$script_path" )" >/dev/null 2>&1 && pwd )
+
+cd $curr_dir
+
 # Default values (can be overridden by config.ini if present)
 config_file="config.ini"
+config_path="$script_dir"
 if [ -f "$config_file" ]; then
+    echo "Reading config file from: $config_file"
     source "$config_file"
+elif [ -f "$config_path/$config_file" ]; then
+    echo "Reading config file from: $config_path/$config_file"
+    source "$config_path/$config_file"
 else
     icons_dir="$PWD/icons"
     appimages_dir="$PWD"
@@ -88,6 +106,10 @@ fi
 process_appimage() {
     APPIMAGE_PATH="$1"
 
+    if ! [ -x "$APPIMAGE_PATH" ]; then
+        chmod +x "$APPIMAGE_PATH"
+    fi
+
     if [ "$verbose" = true ]; then
         echo "Mounting $APPIMAGE_PATH..."
     fi
@@ -154,14 +176,18 @@ if [ $# -eq 0 ]; then
         echo "No AppImage files found in the current directory."
     else
         for appimage in "${appimage_files[@]}"; do
-            process_appimage "$PWD/$appimage"
+            appimage_file=$(basename $appimage)
+            mv $appimage $appimages_dir
+            process_appimage "$appimages_dir/$appimage_file"
         done
     fi
 else
     # Process AppImage files provided as command-line arguments
     for appimage in "$@"; do
         if [ -f "$appimage" ]; then
-            process_appimage "$appimage"
+            appimage_file=$(basename $appimage)
+            mv $appimage $appimages_dir
+            process_appimage "$appimages_dir/$appimage_file"
         else
             echo "File not found: $appimage"
         fi
