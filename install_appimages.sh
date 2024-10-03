@@ -2,6 +2,32 @@
 
 curr_dir=$(pwd)
 
+# Function to check for updates
+check_for_updates() {
+    local current_version=$(cat "$HOME/.config/appimage_desktop_integrator/VERSION" 2>/dev/null || echo "0.0.0")
+    local latest_version=$(wget -qO- https://raw.githubusercontent.com/8ByteSword/appimage-desktop-integrator/main/VERSION)
+
+    if [[ "$current_version" != "$latest_version" ]]; then
+        echo "A new version ($latest_version) of the script is available. Current version: $current_version"
+        read -p "Do you want to update? (y/n): " update_choice
+        if [[ "$update_choice" =~ ^[Yy]$ ]]; then
+            wget "https://raw.githubusercontent.com/8ByteSword/appimage-desktop-integrator/main/setup_appimage_integrator.sh" -O /tmp/setup_appimage_integrator.sh
+            chmod +x /tmp/setup_appimage_integrator.sh
+            /tmp/setup_appimage_integrator.sh
+            rm /tmp/setup_appimage_integrator.sh
+            echo "Update complete. Please run 'install_appimages' again."
+            exit 0
+        else
+            echo "Update skipped."
+        fi
+    else
+        echo "You have the latest version ($current_version) of the script."
+    fi
+}
+
+# Run update check at the beginning
+check_for_updates
+
 # Find path of directory script is located
 script_path=${BASH_SOURCE[0]}
 while [ -L "$script_path" ]; do
@@ -110,6 +136,27 @@ process_appimage() {
         chmod +x "$APPIMAGE_PATH"
     fi
 
+    # Try running the AppImage with --help to capture sandbox errors
+    # DISPLAY= ensures the application doesn't try to open any GUI windows.
+    DISPLAY= $APPIMAGE_PATH --help > appimage_output.txt 2>&1
+
+    if grep -q "SUID sandbox helper binary" appimage_output.txt; then
+        echo "The AppImage was aborted due to sandboxing issues. Running without sandboxing may pose security risks."
+        echo "Should I try running it without sandboxing? (The desktop entry will be configured as such)"
+        echo "Type 'yes' to proceed or 'no' to abort:"
+        read user_consent
+        if [ "$user_consent" = "yes" ]; then
+            EXEC_COMMAND="$APPIMAGE_PATH --no-sandbox"
+            echo "Adding --no-sandbox option due to sandbox issues."
+        else
+            echo "Aborted due to user choice. The AppImage may not function correctly."
+            EXEC_COMMAND="$APPIMAGE_PATH"
+        fi
+    else
+        EXEC_COMMAND="$APPIMAGE_PATH"
+    fi
+
+    # Proceed with mounting the AppImage
     if [ "$verbose" = true ]; then
         echo "Mounting $APPIMAGE_PATH..."
     fi
@@ -146,13 +193,13 @@ process_appimage() {
 
         if [ -f "$DESKTOP_PATH" ]; then
             sed -i "s|^Icon=.*|Icon=$icons_dir/$(basename "$ICON")|" "$DESKTOP_PATH"
-            sed -i "s|^Exec=.*|Exec=$APPIMAGE_PATH|" "$DESKTOP_PATH"
+            sed -i "s|^Exec=.*|Exec=$EXEC_COMMAND|" "$DESKTOP_PATH"
             sed -i "s|^Version=.*|Version=$VERSION|" "$DESKTOP_PATH"
         else
             cat > "$DESKTOP_PATH" <<EOL
 [Desktop Entry]
 Name=$(basename "$APPIMAGE_PATH" .AppImage)
-Exec="$APPIMAGE_PATH"
+Exec="$EXEC_COMMAND"
 Icon=$icons_dir/$(basename "$ICON")
 Type=Application
 Version=$VERSION
@@ -168,10 +215,11 @@ EOL
     sleep 1
 }
 
+
 # Process AppImage files provided as command-line arguments or in the current directory
 if [ $# -eq 0 ]; then
     # Iterate over all AppImage files in the current directory
-    appimage_files=(*.AppImage)
+    appimage_files=("$appimages_dir"/*.AppImage)
     if [ ${#appimage_files[@]} -eq 0 ]; then
         echo "No AppImage files found in the current directory."
     else

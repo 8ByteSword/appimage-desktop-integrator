@@ -3,11 +3,12 @@
 This bash script automates the process of creating desktop entries with icons for AppImage applications. It simplifies the integration of AppImage apps into the desktop environment, making them easily accessible and launchable.
 
 ## Features
-- Automatically creates desktop entries for AppImage files
-- Extracts and sets the appropriate icon for each desktop entry
-- Supports various Linux distributions
-- Allows specifying custom directories for storing icons, AppImages, and desktop entries
-- Provides options for verbose output and silent mode
+
+- **Automatic Integration**: Creates desktop entries for AppImages.
+- **Icon Extraction**: Extracts and stores icons for applications.
+- **Sandbox Detection**: Detects if an AppImage needs `--no-sandbox` and prompts the user.
+- **Update Checker**: Checks for script updates from the repository.
+- **Purge Option**: Allows for clean uninstallation of the integrator.
 
 ## Prerequisites
 - Linux operating system with Bash shell
@@ -15,15 +16,15 @@ This bash script automates the process of creating desktop entries with icons fo
 - `zsync` package (installed automatically if not found)
 
 ## Installation
-1. Download the `install.sh` script from the repository.
-2. Open a terminal and navigate to the directory where the `install.sh` script is located.
+1. Download the `setup_appimage_integrator.sh` script from the repository.
+2. Open a terminal and navigate to the directory where the `setup_appimage_integrator.sh` script is located.
 3. Make the script executable by running the following command:
    ```
-   chmod +x install.sh
+   chmod +x setup_appimage_integrator.sh
    ```
 4. Run the installation script with the following command:
    ```
-   ./install.sh
+   ./setup_appimage_integrator.sh
    ```
 5. The script will download the main `install_appimages.sh` script, create a default configuration file, and add an alias to your shell configuration file.
 6. Restart your terminal or run `source ~/.bashrc` (or `source ~/.zshrc` if using Zsh) to apply the changes.
@@ -31,8 +32,10 @@ This bash script automates the process of creating desktop entries with icons fo
 ## Usage
 1. Open a terminal and navigate to the directory where the AppImage files you want to integrate are located.
 2. Run the script using the `install_appimages` command followed by any desired options and AppImage file paths.
-   ```
+   ```example
    install_appimages [options] [appimage files...]
+   or
+   install_appimages myapp.AppImage anotherapp.AppImage
    ```
    - If no AppImage files are provided as arguments, the script will process all AppImage files in the current directory.
    - To process specific AppImage files, provide their file paths as command-line arguments.
@@ -40,6 +43,17 @@ This bash script automates the process of creating desktop entries with icons fo
    - By default, the desktop entries will be created in the `$HOME/.local/share/applications/` directory.
    - The extracted icons will be stored in the `icons/` folder in the current directory.
 4. If a `config.ini` file is present in the same directory as the script, it will be used to override the default configuration values.
+
+## Updating
+The install_appimages script checks for updates automatically. If an update is available, it will prompt you to update.
+
+## Uninstall
+To uninstall and remove all traces of the integrator, run:
+
+```bash
+setup_appimage_integrator.sh --purge
+```
+
 
 ## Usage Examples
 
