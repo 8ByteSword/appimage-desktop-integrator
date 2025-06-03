@@ -1,162 +1,250 @@
 # AppImage Desktop Integrator
 
-This bash script automates the process of creating desktop entries with icons for AppImage applications. It simplifies the integration of AppImage apps into the desktop environment, making them easily accessible and launchable.
+Seamlessly integrate AppImages into your Linux desktop with automatic desktop entries, icon extraction, and management commands.
 
 ## Features
 
-- **Automatic Integration**: Creates desktop entries for AppImages.
-- **Icon Extraction**: Extracts and stores icons for applications.
-- **Sandbox Detection**: Detects if an AppImage needs `--no-sandbox` and prompts the user.
-- **Update Checker**: Checks for script updates from the repository.
-- **Purge Option**: Allows for clean uninstallation of the integrator.
+- **Simple Command**: Use `ai` for all operations
+- **Auto-Discovery**: Finds AppImages in common locations (Downloads, Desktop, etc.)
+- **Backwards Compatible**: Works with existing AppImage desktop entries
+- **Smart Integration**: Auto-detects Electron apps needing `--no-sandbox`
+- **Easy Management**: List, remove, update, and debug AppImages
+- **Multiple Directories**: Monitor multiple AppImage locations
+- **Tab Completion**: Full bash completion support
+- **Logging System**: Automatically captures and stores AppImage output
+- **Case-Insensitive**: All commands support case-insensitive AppImage name matching
+- **Debug Mode**: Run AppImages with verbose output and debugging tools
 
-## Prerequisites
-- Linux operating system with Bash shell
-- `wget` command-line utility
-- `zsync` package (installed automatically if not found)
+## Quick Install
 
-## Installation
-1. Download the `setup_appimage_integrator.sh` script from the repository.
-2. Open a terminal and navigate to the directory where the `setup_appimage_integrator.sh` script is located.
-3. Make the script executable by running the following command:
-   ```
-   chmod +x setup_appimage_integrator.sh
-   ```
-4. Run the installation script with the following command:
-   ```
-   ./setup_appimage_integrator.sh
-   ```
-5. The script will download the main `install_appimages.sh` script, create a default configuration file, and add an alias to your shell configuration file.
-6. Restart your terminal or run `source ~/.bashrc` (or `source ~/.zshrc` if using Zsh) to apply the changes.
-
-## Usage
-1. Open a terminal and navigate to the directory where the AppImage files you want to integrate are located.
-2. Run the script using the `install_appimages` command followed by any desired options and AppImage file paths.
-   ```example
-   install_appimages [options] [appimage files...]
-   or
-   install_appimages myapp.AppImage anotherapp.AppImage
-   ```
-   - If no AppImage files are provided as arguments, the script will process all AppImage files in the current directory.
-   - To process specific AppImage files, provide their file paths as command-line arguments.
-3. The script will process each AppImage file, create desktop entries, and extract icons.
-   - By default, the desktop entries will be created in the `$HOME/.local/share/applications/` directory.
-   - The extracted icons will be stored in the `icons/` folder in the current directory.
-4. If a `config.ini` file is present in the same directory as the script, it will be used to override the default configuration values.
-
-## Updating
-The install_appimages script checks for updates automatically. If an update is available, it will prompt you to update.
-
-## Uninstall
-To uninstall and remove all traces of the integrator, run:
+One-line installation from the web:
 
 ```bash
-setup_appimage_integrator.sh --purge
+# Using wget:
+wget -qO- https://raw.githubusercontent.com/8ByteSword/appimage-desktop-integrator/main/setup_appimage_integrator.sh | bash
+
+# Using curl:
+curl -sSL https://raw.githubusercontent.com/8ByteSword/appimage-desktop-integrator/main/setup_appimage_integrator.sh | bash
 ```
 
+Or clone and install manually:
 
-## Usage Examples
-
-Suppose you have the following AppImage files in your `~/installations` directory:
-- `AnythingLLMDesktop.AppImage`
-- `LM_Studio-0.2.19.AppImage`
-
-You can run the `update_desktop_apps.sh` script to generate the desktop entries and icons for these AppImage files.
-
-1. Open a terminal and navigate to the `~/installations` directory:
-   ```
-   cd ~/installations
-   ```
-
-2. Run the script with the `-v` or `--verbose` option to enable verbose output:
-
-   ```
-   bash update_desktop_apps.sh -v
-   ```
-
-   Output:
-
-   ```
-   Icons Directory: /home/mgonzalez@depid.local/installations/icons
-   AppImages Directory: /home/mgonzalez@depid.local/installations
-   Desktop Entries Directory: /home/mgonzalez@depid.local/.local/share/applications
-   Mounting /home/mgonzalez@depid.local/installations/AnythingLLMDesktop.AppImage...
-   Mount directory: /tmp/.mount_AnythiyjVS13
-   Mount PID: 2147720
-   Version: 1.4.4
-   Icon: /tmp/.mount_AnythiyjVS13/anythingllm-desktop.png
-   .desktop entry: /home/mgonzalez@depid.local/.local/share/applications/AnythingLLMDesktop.desktop
-   Mounting /home/mgonzalez@depid.local/installations/LM_Studio-0.2.19.AppImage...
-   Mount directory: /tmp/.mount_LM_StuBOC1aE
-   Mount PID: 2147788
-   Version: 0.2.19
-   Icon: /tmp/.mount_LM_StuBOC1aE/lm-studio.png
-   .desktop entry: /home/mgonzalez@depid.local/.local/share/applications/LM_Studio-0.2.19.desktop
-   ```
-
-   The script mounts each AppImage file, extracts the necessary information (version and icon), and generates the corresponding `.desktop` files in the `~/.local/share/applications` directory. The extracted icons are stored in the `~/installations/icons` directory.
-
-3. After running the script, you can verify the generated `.desktop` files:
-   ```
-   cat ~/.local/share/applications/AnythingLLMDesktop.desktop
-
-   [Desktop Entry]
-   Name=AnythingLLMDesktop
-   Exec=/home/mgonzalez@depid.local/installations/AnythingLLMDesktop.AppImage
-   Icon=/home/mgonzalez@depid.local/installations/icons/anythingllm-desktop.png
-   Type=Application
-   Version=1.4.4
-   ```
-
-   ```
-   cat ~/.local/share/applications/LM_Studio-0.2.19.desktop
-
-   [Desktop Entry]
-   Name=LM_Studio-0.2.19
-   Exec=/home/mgonzalez@depid.local/installations/LM_Studio-0.2.19.AppImage
-   Icon=/home/mgonzalez@depid.local/installations/icons/lm-studio.png
-   Type=Application
-   Version=0.2.19
-   ```
-
-   The `.desktop` files contain the necessary information to launch the AppImage files and display their icons in the application launcher.
-
-
-## Customization
-The `install_appimages.sh` script provides several customization options:
-
-- To specify a custom directory for storing icons, use the `-i` or `--icons-dir` option followed by the directory path.
-  - Example: `install_appimages -i /path/to/icons/directory`
-
-- To specify a custom directory where AppImages are stored, use the `-d` or `--appimages-dir` option followed by the directory path.
-  - Example: `install_appimages -d /path/to/appimages/directory`
-
-- To specify a custom directory for storing .desktop entries, use the `-u` or `--update-dir` option followed by the directory path.
-  - Example: `install_appimages -u /path/to/desktop/entries/directory`
-
-- To specify a custom directory for storing tools, use the `-t` or `--tools-dir` option followed by the directory path.
-  - Example: `install_appimages -t /path/to/tools/directory`
-
-- To enable verbose output, use the `-v` or `--verbose` flag.
-  - Example: `install_appimages -v`
-
-- To suppress all output messages except for errors, use the `-s` or `--silent` flag.
-  - Example: `install_appimages -s`
-
-- To display the help message and available options, use the `-h` or `--help` flag.
-  - Example: `install_appimages -h`
-
-You can also create a `config.ini` file in the same directory as the script to set default values for the following options:
-- `icons_dir`: Directory to store icons (default: `$PWD/icons`)
-- `appimages_dir`: Directory where AppImages are stored (default: `$PWD`)
-- `update_dir`: Directory for .desktop entries (default: `$HOME/.local/share/applications`)
-
-Example `config.ini` file:
+```bash
+git clone https://github.com/8ByteSword/appimage-desktop-integrator.git
+cd appimage-desktop-integrator
+chmod +x setup_appimage_integrator.sh
+./setup_appimage_integrator.sh
 ```
-icons_dir=/path/to/custom/icons/directory
-appimages_dir=/path/to/custom/appimages/directory
-update_dir=/path/to/custom/desktop/entries/directory
+
+## Usage
+
+### Quick Start
+
+```bash
+ai              # Show help
+ai status       # Show current configuration
+ai find         # Find AppImages on your system
+ai install      # Interactive installation
+ai list         # List all integrated AppImages
 ```
+
+### Common Tasks
+
+```bash
+# Find and integrate AppImages from common locations
+ai find
+
+# Install a specific AppImage
+ai install ~/Downloads/app.AppImage
+
+# List all integrated AppImages  
+ai list
+
+# Remove an AppImage integration
+ai remove Firefox
+
+# View stored logs for an app (case-insensitive)
+ai logs via
+
+# Run an app with live terminal output
+ai run firefox
+
+# Debug an app with verbose output
+ai debug firefox
+
+# Show all desktop files
+ai desktop
+```
+
+### Examples
+
+```bash
+# Find all AppImages in Downloads, Desktop, etc.
+$ ai find
+Found in /home/user/Downloads:
+  - Firefox.AppImage
+  - VIA.AppImage
+Would you like to integrate? (y/n)
+
+# See what's already integrated
+$ ai list
+1. Firefox
+   Version: 120.0
+   Location: /home/user/AppImages/Firefox.AppImage
+   
+2. VIA
+   Version: 3.0.0
+   Location: /home/user/AppImages/via-3.0.0-linux.AppImage
+
+# Remove an integration
+$ ai remove VIA
+Found: VIA
+Remove this AppImage integration? (y/n): y
+✓ Removed VIA integration
+```
+
+## What's New in v2.0
+
+- **Automatic Logging**: All AppImages now have their output automatically logged to `~/.config/appimage_desktop_integrator/logs/`
+- **Improved `logs` Command**: Shows stored logs instead of launching the app
+- **New `run` Command**: Run AppImages with live terminal output (replaces old logs behavior)
+- **New `debug` Command**: Run AppImages with verbose output and debugging options
+- **Case-Insensitive Search**: Commands like `ai logs firefox` will find "Firefox"
+- **Automatic Upgrade**: First run after update will prompt to upgrade existing integrations
+
+## Configuration
+
+The integrator uses a configuration file at `~/.config/appimage_desktop_integrator/config.ini`:
+
+```ini
+# Icons location
+icons_dir=/home/user/.local/share/icons/appimage-integrator
+
+# Desktop entries location  
+update_dir=/home/user/.local/share/applications
+
+# AppImage storage directories (multiple supported)
+appimages_dirs=("/home/user/Applications" "/home/user/AppImages")
+```
+
+The tool automatically searches these common locations:
+
+- `~/Downloads`
+- `~/Desktop`
+- `~/Applications`
+- `~/apps`
+- `~/AppImages`
+- `~/.local/bin`
+- `/opt`
+
+## Features in Detail
+
+### Auto-Discovery
+
+`ai find` searches common locations for AppImages and shows which ones are already integrated:
+
+```bash
+$ ai find
+Found in /home/user/Downloads:
+  ✓ Firefox.AppImage (already integrated)
+  - NewApp.AppImage
+```
+
+### Backwards Compatible
+
+Works with AppImages integrated by other tools or manually created desktop entries.
+
+### Smart Electron Detection
+
+Automatically adds `--no-sandbox` flag for Electron-based apps like Discord, Slack, VS Code, etc.
+
+### Interactive Installation
+
+When running `ai install` without arguments, it shows found AppImages and lets you choose where to store them.
+
+### Debug Mode
+
+The integrator provides powerful debugging capabilities:
+
+```bash
+# Interactive debug with app-specific flags
+ai debug firefox
+
+# Run with debug environment variable
+APPIMAGE_DEBUG=1 ai run firefox
+
+# View debug logs after running
+ai logs firefox
+```
+
+#### Debug Features:
+
+- **App Detection**: Automatically detects app type and applies appropriate debug flags
+  - Electron apps: `--verbose --enable-logging --log-level=verbose`
+  - Qt apps: Sets `QT_LOGGING_RULES="*=true"`
+  - GTK apps: Sets `GTK_DEBUG=all`
+- **System Tracing**: Optional `strace` integration for system call analysis
+- **Environment Variables**:
+  - `APPIMAGE_DEBUG=1` - Enable debug logging in wrapper
+  - `APPIMAGE_VERBOSE=1` - Enable verbose output
+  - `APPIMAGE_EXTRACT_AND_RUN=1` - Extract and run (for FUSE issues)
+- **Enhanced Logging**: Debug mode logs command line arguments, environment variables, and timestamps
+
+## Troubleshooting
+
+### Can't find my AppImages?
+
+- Check `ai status` to see which directories are monitored
+- Place AppImages in standard locations like `~/Applications` or `~/Downloads`
+- Use `ai install /path/to/app.AppImage` for custom locations
+
+### Desktop entry not appearing?
+
+```bash
+update-desktop-database ~/.local/share/applications
+```
+
+### App won't launch due to sandbox error?
+
+The tool auto-detects most Electron apps, but if missed:
+
+```bash
+# Remove and re-add with force flag
+ai remove AppName
+ai install /path/to/app.AppImage
+```
+
+### Need to debug an AppImage issue?
+
+```bash
+# Run with debug output
+ai debug AppName
+
+# Check logs for errors
+ai logs AppName
+
+# Run with FUSE extraction if mounting fails
+APPIMAGE_EXTRACT_AND_RUN=1 ai run AppName
+```
+
+## Uninstall
+
+Remove a specific AppImage integration:
+
+```bash
+ai remove AppName
+```
+
+Completely uninstall the integrator:
+
+```bash
+setup_appimage_integrator --purge
+```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
 
 ## License
-This script is released under the [MIT License](https://opensource.org/licenses/MIT).
+
+This project is released under the [MIT License](https://opensource.org/licenses/MIT).
