@@ -44,6 +44,11 @@ init_minimal_config() {
         icons_dir="$HOME/.local/share/icons/appimage-integrator"
         appimages_dirs=("$HOME/AppImages" "$HOME/Applications")
         update_dir="$HOME/.local/share/applications"
+
+        # Make directory for desktop entries if not already existing
+        if ! [ -d "$update_dir" ]; then
+            mkdir "$update_dir"
+        fi
     fi
 }
 
