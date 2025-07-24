@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Version info
-CURRENT_VERSION="2.0.0"
+CURRENT_VERSION="2.0.2"
 
 # Common locations where AppImages might be found
 COMMON_APPIMAGE_LOCATIONS=(
@@ -44,11 +44,14 @@ init_minimal_config() {
         icons_dir="$HOME/.local/share/icons/appimage-integrator"
         appimages_dirs=("$HOME/AppImages" "$HOME/Applications")
         update_dir="$HOME/.local/share/applications"
-
-        # Make directory for desktop entries if not already existing
-        if ! [ -d "$update_dir" ]; then
-            mkdir "$update_dir"
-        fi
+    fi
+    
+    # Always ensure directories exist (regardless of config file presence)
+    if ! [ -d "$update_dir" ]; then
+        mkdir -p "$update_dir"
+    fi
+    if ! [ -d "$icons_dir" ]; then
+        mkdir -p "$icons_dir"
     fi
 }
 
@@ -164,7 +167,14 @@ desktop_file_exists() {
 # Install a single AppImage with better UX
 install_single_appimage() {
     local appimage_path="$1"
+    local original_path=$(dirname "$appimage_path")
     local appimage_name=$(basename "$appimage_path")
+    
+    # Check if original_path is a valid path (not .)
+    # If not change to $PWD
+    if [ "$original_path" = "." ]; then
+        original_path=$PWD
+    fi
     
     # Ask where to install
     echo "Where would you like to store this AppImage?"
@@ -175,14 +185,14 @@ install_single_appimage() {
         ((i++))
     done
     echo "  $i) Custom location"
-    echo "  0) Keep in current location ($(dirname "$appimage_path"))"
+    echo "  0) Keep in current location ($original_path)"
     
     read -p "Choice (default: 1): " choice
     choice=${choice:-1}
     
     local target_dir
     if [ "$choice" = "0" ]; then
-        target_dir=$(dirname "$appimage_path")
+        target_dir="$original_path"
     elif [ "$choice" = "$i" ]; then
         read -p "Enter custom directory: " target_dir
         # Add to appimages_dirs for future use
@@ -195,7 +205,7 @@ install_single_appimage() {
     mkdir -p "$target_dir"
     
     # Move or copy the AppImage
-    if [ "$(dirname "$appimage_path")" != "$target_dir" ]; then
+    if [ "$original_path" != "$target_dir" ]; then
         echo "Moving $appimage_name to $target_dir..."
         mv "$appimage_path" "$target_dir/"
         appimage_path="$target_dir/$appimage_name"
@@ -683,10 +693,19 @@ show_simple_help() {
 # Clean AppImage name
 clean_appimage_name() {
     local name="$1"
-    name=$(echo "$name" | sed -E 's/[-_]?[0-9]+\.[0-9]+\.[0-9]+//g')
-    name=$(echo "$name" | sed -E 's/[-_]?(x86_64|linux|AppImage)//gi')
-    name=$(echo "$name" | sed 's/[-_]$//')
-    name=$(echo "$name" | sed 's/\b\(.\)/\u\1/g')
+    local original_name="${name%%[^a-zA-Z]*}"
+    # Simplified cleaning - cut everything after the first non alphabetic character
+    read -p "Use the name [$original_name]? (y/n): " confirm
+    if [[ "$confirm" =~ ^[Nn]$ ]]; then
+        read -p "Enter a custom name for the AppImage: " name
+        # Ensure name is not empty
+        if [ -z "$name" ]; then
+            echo "Name cannot be empty. Using default: $original_name" >&2
+            name="$original_name"
+        fi
+    else
+        name="$original_name"
+    fi
     echo "$name"
 }
 
@@ -840,7 +859,7 @@ case "${1:-help}" in
             local found=false
             for desktop_file in "$update_dir"/*.desktop; do
                 if [ -f "$desktop_file" ] && grep -q "\.AppImage" "$desktop_file" 2>/dev/null; then
-                    name=$(grep "^Name=" "$desktop_file" | cut -d'=' -f2)
+                    local name=$(grep "^Name=" "$desktop_file" | cut -d'=' -f2)
                     if [[ "$name" == *"$2"* ]]; then
                         found=true
                         echo "Found: $name"

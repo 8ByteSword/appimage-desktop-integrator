@@ -162,6 +162,24 @@ Automatically adds `--no-sandbox` flag for Electron-based apps like Discord, Sla
 
 When running `ai install` without arguments, it shows found AppImages and lets you choose where to store them.
 
+#### AppImage Name Customization
+
+During installation, the tool automatically extracts a clean name from the AppImage filename (e.g., `MediaElch_linux_2.12.0_2024-10-13_git-8032465-1.AppImage` becomes `MediaElch`) and asks for confirmation:
+
+```bash
+$ ai install MediaElch_linux_2.12.0_2024-10-13_git-8032465-1.AppImage
+Use the name [MediaElch]? (y/n): y
+```
+
+You can also provide a custom name:
+
+```bash
+Use the name [MediaElch]? (y/n): n
+Enter a custom name for the AppImage: My Media Center
+```
+
+This custom name will be used throughout the tool (in `ai list`, `ai remove`, etc.) while maintaining the link to the original AppImage file.
+
 ### Debug Mode
 
 The integrator provides powerful debugging capabilities:
@@ -177,7 +195,7 @@ APPIMAGE_DEBUG=1 ai run firefox
 ai logs firefox
 ```
 
-#### Debug Features:
+#### Debug Features
 
 - **App Detection**: Automatically detects app type and applies appropriate debug flags
   - Electron apps: `--verbose --enable-logging --log-level=verbose`
@@ -192,19 +210,19 @@ ai logs firefox
 
 ## Troubleshooting
 
-### Can't find my AppImages?
+### Can't find my AppImages
 
 - Check `ai status` to see which directories are monitored
 - Place AppImages in standard locations like `~/Applications` or `~/Downloads`
 - Use `ai install /path/to/app.AppImage` for custom locations
 
-### Desktop entry not appearing?
+### Desktop entry not appearing
 
 ```bash
 update-desktop-database ~/.local/share/applications
 ```
 
-### App won't launch due to sandbox error?
+### App won't launch due to sandbox error
 
 The tool auto-detects most Electron apps, but if missed:
 
@@ -214,7 +232,7 @@ ai remove AppName
 ai install /path/to/app.AppImage
 ```
 
-### Need to debug an AppImage issue?
+### Need to debug an AppImage issue
 
 ```bash
 # Run with debug output

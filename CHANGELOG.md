@@ -1,6 +1,30 @@
 # Changelog
 
-## [2.0.0] - 2025-01-06
+## [2.0.2] - 2025-07-24
+
+### Added
+
+- **Interactive Name Customization**: During installation, users can now confirm or customize the extracted AppImage name for better user experience (fixes #4)
+
+### Fixed
+
+- **AppImage Name Extraction**: Improved name extraction from complex AppImage filenames with better handling of version numbers and platform suffixes (fixes #4)
+- **Current Directory Handling**: Fixed bug where keeping AppImage in current location would fail due to `dirname` returning "." instead of the actual path (fixes #5)
+- **Variable Scoping**: Fixed local variable scoping issue in the remove function that could cause potential conflicts (fixes #6)
+
+### Changed
+
+- **Name Extraction Logic**: Simplified AppImage name cleaning to use alphabetic character extraction with user confirmation
+- **Installation Flow**: Installation now prompts for name confirmation, allowing for custom display names while maintaining file system links
+
+## [2.0.1] - 2025-07-03
+
+### Fixed
+
+- **Directory Handling**: Fixed handling of non-existing directories for desktop entries (PR #3)
+- **Installation Robustness**: Improved error handling when desktop entry directories don't exist
+
+## [2.0.0] - 2025-06-03
 
 ### Added
 
@@ -71,26 +95,3 @@
 ---
 
 [Full Changelog](https://github.com/8ByteSword/appimage-desktop-integrator/commits/main)
-
-## [1.2.0] - 2025-06-03
-
-### Added
-
-- **Management Commands**: New commands for list, search, uninstall, and update-all
-- **Bash Completion**: Tab completion for commands and AppImage names
-- **Force Reinstall**: `-f` flag to force update existing desktop entries
-- **Better Electron Detection**: Automatically detects and handles Electron apps
-- **Improved Icon Extraction**: Prefers higher resolution icons
-- **Clean App Names**: Better parsing of AppImage names for desktop entries
-- **One-line Install**: Documented web installation method
-
-### Changed
-
-- **Config Location**: Moved to `~/.config/appimage_desktop_integrator/`
-- **Enhanced Sandbox Detection**: More reliable detection of apps needing --no-sandbox
-- **Better Error Handling**: Improved mount and unmount procedures
-
-### Fixed
-
-- **Desktop Entry Updates**: Properly updates existing entries
-- **Icon Path Handling**: Fixed issues with icon extraction and storage
