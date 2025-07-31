@@ -1,0 +1,21 @@
+# GitHub response templates (not for public repo)
+.github_response_templates.md
+
+# Test artifacts and temporary files
+/tmp/
+*.tmp
+*.log
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+.scannerwork/
+.claude/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+appimage_files/

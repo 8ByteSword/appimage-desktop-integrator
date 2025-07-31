@@ -208,8 +208,9 @@ install_single_appimage() {
     if [ "$original_path" != "$target_dir" ]; then
         echo "Moving $appimage_name to $target_dir..."
         mv "$appimage_path" "$target_dir/"
-        appimage_path="$target_dir/$appimage_name"
     fi
+    # Always update the path to ensure it's correct
+    appimage_path="$target_dir/$appimage_name"
     
     # Process the AppImage
     process_appimage "$appimage_path"
@@ -735,7 +736,7 @@ process_appimage() {
     echo "Processing $(basename "$APPIMAGE_PATH")..."
     
     # Try to detect sandbox issues
-    DISPLAY= timeout 2 "$APPIMAGE_PATH" --help > /tmp/appimage_test.txt 2>&1 || true
+    { DISPLAY= timeout 2 "$APPIMAGE_PATH" --help > /tmp/appimage_test.txt 2>&1 || true; } 2>/dev/null
     
     # Mount the AppImage
     "$APPIMAGE_PATH" --appimage-mount > /tmp/mount_output.txt 2>&1 &
@@ -856,10 +857,10 @@ case "${1:-help}" in
             done
         else
             # Remove AppImage integration
-            local found=false
+            found=false
             for desktop_file in "$update_dir"/*.desktop; do
                 if [ -f "$desktop_file" ] && grep -q "\.AppImage" "$desktop_file" 2>/dev/null; then
-                    local name=$(grep "^Name=" "$desktop_file" | cut -d'=' -f2)
+                    name=$(grep "^Name=" "$desktop_file" | cut -d'=' -f2)
                     if [[ "$name" == *"$2"* ]]; then
                         found=true
                         echo "Found: $name"
