@@ -66,7 +66,13 @@ appimages_dirs=("$ISOLATED_HOME/AppImages" "$ISOLATED_HOME/Applications")
 EOF
     
     # Set version to avoid upgrade prompts
-    echo "2.0.2" > "$ISOLATED_HOME/.config/appimage_desktop_integrator/VERSION"
+    local project_version
+    if [[ -f "$SCRIPT_DIR/VERSION" ]]; then
+        project_version=$(cat "$SCRIPT_DIR/VERSION" | tr -d '[:space:]')
+    else
+        project_version="0.0.0"
+    fi
+    echo "$project_version" > "$ISOLATED_HOME/.config/appimage_desktop_integrator/VERSION"
     
     # Copy main script to isolated environment
     cp "$SCRIPT_DIR/install_appimages.sh" "$ISOLATED_ROOT/bin/ai"

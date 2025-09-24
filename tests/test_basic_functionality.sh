@@ -10,7 +10,9 @@ test_status_command() {
     log_info "Testing status command"
     
     # Set the version to current version to avoid upgrade prompt
-    echo "2.0.0" > "$TEST_CONFIG_DIR/VERSION"
+    local project_version
+    project_version=$(get_project_version)
+    echo "$project_version" > "$TEST_CONFIG_DIR/VERSION"
     
     local output
     output=$("$TEST_ENV_DIR/bin/ai_test" status 2>&1)
@@ -184,7 +186,9 @@ test_version_file_creation() {
     if [[ -f "$TEST_CONFIG_DIR/VERSION" ]]; then
         local version_content
         version_content=$(cat "$TEST_CONFIG_DIR/VERSION")
-        assert_equal "2.0.0" "$version_content" "Version file should contain current version if created"
+        local project_version
+        project_version=$(get_project_version)
+        assert_equal "$project_version" "$version_content" "Version file should contain current version if created"
     fi
 }
 

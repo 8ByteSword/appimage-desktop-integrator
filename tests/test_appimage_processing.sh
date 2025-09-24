@@ -95,7 +95,7 @@ test_duplicate_integration_prevention() {
     local output
     output=$("$TEST_ENV_DIR/bin/ai_test" find 2>&1)
     
-    assert_equal 1 "$(echo "$output" | grep -c "already integrated")" "Should detect already integrated AppImage"
+    assert_equal 1 "$(echo "$output" | grep -c "DuplicateTest.*already integrated")" "Should detect already integrated AppImage"
 }
 
 test_list_integrated_appimages() {
@@ -114,8 +114,8 @@ test_list_integrated_appimages() {
     output=$("$TEST_ENV_DIR/bin/ai_test" list 2>&1)
     
     assert_equal 1 "$(echo "$output" | grep -c "Integrated AppImages")" "Should show integrated AppImages header"
-    assert_equal 1 "$(echo "$output" | grep -c "ListTest1")" "Should list first integrated AppImage"
-    assert_equal 1 "$(echo "$output" | grep -c "ListTest2")" "Should list second integrated AppImage"
+    assert_equal 1 "$(echo "$output" | grep -c "^[0-9]\+\. ListTest1$")" "Should list first integrated AppImage"
+    assert_equal 1 "$(echo "$output" | grep -c "^[0-9]\+\. ListTest2$")" "Should list second integrated AppImage"
 }
 
 test_appimage_removal() {
@@ -195,7 +195,9 @@ test_version_upgrade_detection() {
     local version_content
     version_content=$(cat "$TEST_CONFIG_DIR/VERSION")
     
-    assert_equal "2.0.0" "$version_content" "Version should be updated to current version"
+    local project_version
+    project_version=$(get_project_version)
+    assert_equal "$project_version" "$version_content" "Version should be updated to current version"
 }
 
 test_icon_extraction() {

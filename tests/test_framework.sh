@@ -40,6 +40,16 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Get current version from project VERSION file
+get_project_version() {
+    local version_file="$TEST_FRAMEWORK_DIR/../VERSION"
+    if [[ -f "$version_file" ]]; then
+        cat "$version_file" | tr -d '[:space:]'
+    else
+        echo "0.0.0"
+    fi
+}
+
 # Test assertion functions
 assert_equal() {
     local expected="$1"
@@ -184,7 +194,9 @@ appimages_dirs=("$TEST_HOME/AppImages" "$TEST_HOME/Applications" "$TEST_HOME/app
 EOF
     
     # Create test version file (set to current version to avoid upgrade prompts)
-    echo "2.0.0" > "$TEST_CONFIG_DIR/VERSION"
+    local project_version
+    project_version=$(get_project_version)
+    echo "$project_version" > "$TEST_CONFIG_DIR/VERSION"
     
     # Create wrapper script for testing
     local wrapper_dir="$TEST_CONFIG_DIR/bin"
@@ -245,6 +257,13 @@ DESKTOP_EOF
         
         # Create mock icon
         touch "$TEST_ENV_DIR/mock_mount_\$(basename "\$0" .AppImage)/icon.png"
+        
+        # For Electron apps, create specific files that detection logic looks for
+        if [[ "\$(basename "\$0")" =~ (VSCode|vscode|Electron) ]]; then
+            mkdir -p "$TEST_ENV_DIR/mock_mount_\$(basename "\$0" .AppImage)/resources"
+            touch "$TEST_ENV_DIR/mock_mount_\$(basename "\$0" .AppImage)/resources/electron.asar"
+            touch "$TEST_ENV_DIR/mock_mount_\$(basename "\$0" .AppImage)/chrome-sandbox"
+        fi
         
         # Keep running to simulate mount
         sleep 1000 &

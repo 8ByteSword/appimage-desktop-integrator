@@ -1,0 +1,15 @@
+# AppImage Desktop Integrator Configuration
+# Copy this file to ~/.config/appimage_desktop_integrator/config.ini and customize as needed
+
+# Icons directory - where extracted AppImage icons are stored
+icons_dir=~/.local/share/icons/appimage-integrator
+
+# Desktop entries directory - where .desktop files are created
+update_dir=~/.local/share/applications
+
+# AppImage storage directories - array format for multiple directories
+# The tool will search these directories and offer them as installation targets
+appimages_dirs=("$HOME/Applications" "$HOME/AppImages" "$HOME/apps")
+
+# Legacy single directory support (deprecated - use appimages_dirs instead)
+# appimages_dir=~/AppImages

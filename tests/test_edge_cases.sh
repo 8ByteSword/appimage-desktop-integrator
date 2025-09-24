@@ -96,7 +96,9 @@ test_empty_version_file() {
     local version_content
     version_content=$(cat "$TEST_CONFIG_DIR/VERSION")
     
-    assert_equal "2.0.0" "$version_content" "Empty version file should be updated"
+    local project_version
+    project_version=$(get_project_version)
+    assert_equal "$project_version" "$version_content" "Empty version file should be updated"
 }
 
 test_invalid_version_format() {

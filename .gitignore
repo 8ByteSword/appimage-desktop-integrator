@@ -19,3 +19,8 @@
 Thumbs.db
 
 appimage_files/
+
+# Local configuration files
+config.ini
+
+.serena/

@@ -6,6 +6,8 @@ Seamlessly integrate AppImages into your Linux desktop with automatic desktop en
 
 - **Simple Command**: Use `ai` for all operations
 - **Auto-Discovery**: Finds AppImages in common locations (Downloads, Desktop, etc.)
+- **Atomic Operations**: Files never get orphaned if integration fails (v2.1.0)
+- **Intelligent Remove**: Fuzzy matching with suggestions for removal operations (v2.1.0)
 - **Backwards Compatible**: Works with existing AppImage desktop entries
 - **Smart Integration**: Auto-detects Electron apps needing `--no-sandbox`
 - **Easy Management**: List, remove, update, and debug AppImages
@@ -114,18 +116,50 @@ Remove this AppImage integration? (y/n): y
 
 ## Configuration
 
-The integrator uses a configuration file at `~/.config/appimage_desktop_integrator/config.ini`:
+The integrator uses a configuration file at `~/.config/appimage_desktop_integrator/config.ini` that is automatically created during installation.
+
+### Configuration File Location
+
+- **Primary location**: `~/.config/appimage_desktop_integrator/config.ini`
+- **Created automatically**: During first installation via setup script
+- **Uses home directory**: All paths use `~` or `$HOME` to work for any user
+
+### Default Configuration
 
 ```ini
 # Icons location
-icons_dir=/home/user/.local/share/icons/appimage-integrator
+icons_dir=~/.local/share/icons/appimage-integrator
 
 # Desktop entries location  
-update_dir=/home/user/.local/share/applications
+update_dir=~/.local/share/applications
 
 # AppImage storage directories (multiple supported)
-appimages_dirs=("/home/user/Applications" "/home/user/AppImages")
+appimages_dirs=("$HOME/Applications" "$HOME/AppImages")
 ```
+
+### Customizing Paths
+
+You can edit the configuration file to customize the paths:
+
+1. **Icons directory**: Where extracted AppImage icons are stored
+
+   ```ini
+   icons_dir=~/my-custom-icons
+   ```
+
+2. **Desktop entries**: Where `.desktop` files are created
+
+   ```ini
+   update_dir=~/.local/share/applications
+   ```
+
+3. **AppImage directories**: Directories monitored for AppImages (array format)
+
+   ```ini
+   appimages_dirs=("$HOME/Applications" "$HOME/AppImages" "$HOME/my-apps")
+   ```
+
+**Note**: Always use `~` or `$HOME` instead of hardcoded paths like `/home/username` to ensure the configuration works across different user accounts.
 
 The tool automatically searches these common locations:
 

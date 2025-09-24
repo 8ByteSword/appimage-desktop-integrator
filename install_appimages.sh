@@ -1,7 +1,13 @@
 #!/bin/bash
 
-# Version info
-CURRENT_VERSION="2.0.2"
+# Version info - read from VERSION file
+get_current_version() {
+    # Version will be embedded during installation by setup script
+    # This placeholder gets replaced with actual version
+    echo "__VERSION_PLACEHOLDER__"
+}
+
+# CURRENT_VERSION will be set by get_current_version() when needed
 
 # Common locations where AppImages might be found
 COMMON_APPIMAGE_LOCATIONS=(
@@ -27,23 +33,110 @@ script_dir=$( cd -P "$( dirname "$script_path" )" >/dev/null 2>&1 && pwd )
 
 # Initialize with minimal config for quick commands
 init_minimal_config() {
+    # Global variables for config
+    icons_dir=""
+    update_dir=""
+    appimages_dir=""
+    appimages_dirs=()
+    temp_dirs=()  # Declare outside the loop to avoid scope issues
+    
     config_path="$HOME/.config/appimage_desktop_integrator"
+    
+    # Only enable debug output if APPIMAGE_INTEGRATOR_DEBUG is set (not just TEST_ENV_DIR)
+    local debug_enabled=false
+    if [ -n "$APPIMAGE_INTEGRATOR_DEBUG" ]; then
+        debug_enabled=true
+        echo "[DEBUG] init_minimal_config: config_path=$config_path" >&2
+        echo "[DEBUG] init_minimal_config: HOME=$HOME" >&2
+    fi
+    
     if [ -f "$config_path/config.ini" ]; then
-        source "$config_path/config.ini"
-        
+        # Use process substitution to avoid subshell issues
+        while IFS='=' read -r key value || [ -n "$key" ]; do
+            # Skip comments and empty lines
+            [[ "$key" =~ ^[[:space:]]*# ]] && continue
+            [[ -z "$key" ]] && continue
+            
+            # Remove leading/trailing whitespace using parameter expansion instead of xargs
+            key="${key#"${key%%[![:space:]]*}"}"  # Remove leading whitespace
+            key="${key%"${key##*[![:space:]]}"}"  # Remove trailing whitespace
+            value="${value#"${value%%[![:space:]]*}"}"  # Remove leading whitespace
+            value="${value%"${value##*[![:space:]]}"}"  # Remove trailing whitespace
+            
+            # Debug output only when explicitly enabled
+            if [ "$debug_enabled" = true ]; then
+                echo "[DEBUG] Parsing key='$key', value='$value'" >&2
+            fi
+            
+            # Parse known config values safely
+            case "$key" in
+                icons_dir)
+                    # Expand ~ to $HOME safely
+                    icons_dir="${value/#\~/$HOME}"
+                    [ "$debug_enabled" = true ] && echo "[DEBUG] Set icons_dir=$icons_dir" >&2
+                    ;;
+                update_dir)
+                    update_dir="${value/#\~/$HOME}"
+                    [ "$debug_enabled" = true ] && echo "[DEBUG] Set update_dir=$update_dir" >&2
+                    ;;
+                appimages_dir)
+                    # Legacy single directory support
+                    appimages_dir="${value/#\~/$HOME}"
+                    [ "$debug_enabled" = true ] && echo "[DEBUG] Set appimages_dir=$appimages_dir" >&2
+                    ;;
+                appimages_dirs)
+                    # Handle array format safely - extract values between quotes
+                    temp_dirs=()  # Reset temp array
+                    if [[ "$value" =~ ^\( ]]; then
+                        [ "$debug_enabled" = true ] && echo "[DEBUG] Processing appimages_dirs array: $value" >&2
+                        # Extract quoted values from array format
+                        local remaining_value="$value"
+                        while [[ "$remaining_value" =~ \"([^\"]+)\" ]]; do
+                            dir="${BASH_REMATCH[1]}"
+                            dir="${dir/#\~/$HOME}"
+                            temp_dirs+=("$dir")
+                            [ "$debug_enabled" = true ] && echo "[DEBUG] Added directory: $dir" >&2
+                            remaining_value="${remaining_value/${BASH_REMATCH[0]}/}"
+                        done
+                        appimages_dirs=("${temp_dirs[@]}")
+                        [ "$debug_enabled" = true ] && echo "[DEBUG] Final appimages_dirs: ${appimages_dirs[*]}" >&2
+                    fi
+                    ;;
+                *)
+                    # Ignore unknown config keys for security
+                    [ "$debug_enabled" = true ] && echo "[DEBUG] Ignoring unknown key: $key" >&2
+                    ;;
+            esac
+        done < <(cat "$config_path/config.ini")
+
         # Handle old config format (single appimages_dir)
-        if [ -n "$appimages_dir" ] && [ -z "$appimages_dirs" ]; then
+        if [ -n "$appimages_dir" ] && [ ${#appimages_dirs[@]} -eq 0 ]; then
             appimages_dirs=("$appimages_dir")
+            [ "$debug_enabled" = true ] && echo "[DEBUG] Used legacy appimages_dir: $appimages_dir" >&2
         fi
         
         # Ensure appimages_dirs is an array
-        if [ -z "$appimages_dirs" ]; then
+        if [ ${#appimages_dirs[@]} -eq 0 ]; then
             appimages_dirs=("$HOME/AppImages" "$HOME/Applications")
+            [ "$debug_enabled" = true ] && echo "[DEBUG] Used default appimages_dirs: ${appimages_dirs[*]}" >&2
         fi
     else
         icons_dir="$HOME/.local/share/icons/appimage-integrator"
         appimages_dirs=("$HOME/AppImages" "$HOME/Applications")
         update_dir="$HOME/.local/share/applications"
+        [ "$debug_enabled" = true ] && echo "[DEBUG] No config file, using defaults" >&2
+    fi
+    
+    # Clean up temp variable
+    unset temp_dirs
+    
+    # Debug final state only when explicitly enabled
+    if [ "$debug_enabled" = true ]; then
+        echo "[DEBUG] Final config:" >&2
+        echo "[DEBUG]   icons_dir=$icons_dir" >&2
+        echo "[DEBUG]   update_dir=$update_dir" >&2
+        echo "[DEBUG]   appimages_dirs=(${appimages_dirs[*]})" >&2
+        echo "[DEBUG]   appimages_dirs count=${#appimages_dirs[@]}" >&2
     fi
     
     # Always ensure directories exist (regardless of config file presence)
@@ -58,6 +151,7 @@ init_minimal_config() {
 # Show current configuration and status
 show_status() {
     init_minimal_config
+    check_version_upgrade
     echo "AppImage Desktop Integrator - Current Status"
     echo "==========================================="
     echo ""
@@ -68,7 +162,7 @@ show_status() {
     echo "  AppImage directories monitored:"
     for dir in "${appimages_dirs[@]}"; do
         if [ -d "$dir" ]; then
-            count=$(find "$dir" -name "*.AppImage" 2>/dev/null | wc -l)
+            count=$(find "$dir" -iname "*.appimage" 2>/dev/null | wc -l)
             echo "    - $dir ($count AppImages)"
         else
             echo "    - $dir (not created yet)"
@@ -82,7 +176,7 @@ show_status() {
         if [ -f "$desktop_file" ]; then
             # Check if it's an AppImage desktop file (more flexible detection)
             exec_line=$(grep "^Exec=" "$desktop_file" 2>/dev/null || true)
-            if [[ "$exec_line" == *".AppImage"* ]]; then
+            if [[ "${exec_line,,}" == *".appimage"* ]]; then
                 ((installed_count++))
             fi
         fi
@@ -107,7 +201,7 @@ find_appimages() {
     
     for location in "${COMMON_APPIMAGE_LOCATIONS[@]}"; do
         if [ -d "$location" ]; then
-            appimages=($(find "$location" -maxdepth 2 -name "*.AppImage" 2>/dev/null))
+            appimages=($(find "$location" -maxdepth 2 -iname "*.appimage" 2>/dev/null))
             if [ ${#appimages[@]} -gt 0 ]; then
                 found_any=true
                 echo "Found in $location:"
@@ -151,12 +245,12 @@ find_appimages() {
 # Check if desktop file exists for an AppImage
 desktop_file_exists() {
     local appimage_name="$1"
-    local base_name="${appimage_name%.AppImage}"
+    local base_name="${appimage_name%.*}"
     
     for desktop_file in "$update_dir"/*.desktop; do
         if [ -f "$desktop_file" ]; then
             # More flexible check - look for the AppImage in Exec line
-            if grep -q "$base_name.*\.AppImage" "$desktop_file" 2>/dev/null; then
+            if grep -iq "$base_name.*\.appimage" "$desktop_file" 2>/dev/null; then
                 return 0
             fi
         fi
@@ -204,16 +298,40 @@ install_single_appimage() {
     # Create directory if needed
     mkdir -p "$target_dir"
     
-    # Move or copy the AppImage
-    if [ "$original_path" != "$target_dir" ]; then
-        echo "Moving $appimage_name to $target_dir..."
-        mv "$appimage_path" "$target_dir/"
-    fi
-    # Always update the path to ensure it's correct
-    appimage_path="$target_dir/$appimage_name"
+    # ATOMIC FIX: Process AppImage FIRST in original location
+    # Only move if processing succeeds
+    local final_path="$appimage_path"
+    local needs_move=false
     
-    # Process the AppImage
-    process_appimage "$appimage_path"
+    if [ "$original_path" != "$target_dir" ]; then
+        needs_move=true
+        echo "Will move $appimage_name to $target_dir after successful processing..."
+    fi
+    
+    # Process the AppImage in original location
+    if process_appimage "$appimage_path"; then
+        # Processing succeeded - now move if needed
+        if [ "$needs_move" = true ]; then
+            echo "Moving $appimage_name to $target_dir..."
+            if mv "$appimage_path" "$target_dir/"; then
+                final_path="$target_dir/$appimage_name"
+                # Update desktop file with new path
+                local desktop_file="$(basename "$appimage_path" | sed 's/\.[Aa]pp[Ii]mage$//')".desktop
+                local desktop_path="$update_dir/$desktop_file"
+                if [ -f "$desktop_path" ]; then
+                    sed -i "s|$appimage_path|$final_path|g" "$desktop_path"
+                fi
+            else
+                echo "Warning: Failed to move file, but integration completed at original location" >&2
+            fi
+        fi
+    else
+        # Processing failed - file stays in original location
+        if [ "$needs_move" = true ]; then
+            echo "Processing failed - AppImage remains at: $appimage_path" >&2
+        fi
+        return 1
+    fi
 }
 
 # List installed AppImages with more info
@@ -227,7 +345,7 @@ list_installed_appimages() {
         if [ -f "$desktop_file" ]; then
             # Check if it's an AppImage desktop file
             exec_line=$(grep "^Exec=" "$desktop_file" 2>/dev/null || true)
-            if [[ "$exec_line" == *".AppImage"* ]]; then
+            if [[ "${exec_line,,}" == *".appimage"* ]]; then
                 ((count++))
                 name=$(grep "^Name=" "$desktop_file" | cut -d'=' -f2)
                 # Extract actual AppImage path from exec line (handle wrapper script)
@@ -280,7 +398,7 @@ show_desktop_files() {
     for desktop_file in "$update_dir"/*.desktop; do
         if [ -f "$desktop_file" ]; then
             # Check if it's an AppImage desktop file
-            if grep -q "\.AppImage" "$desktop_file" 2>/dev/null; then
+            if grep -iq "\.appimage" "$desktop_file" 2>/dev/null; then
                 found=true
                 echo "=== $desktop_file ==="
                 cat "$desktop_file"
@@ -304,7 +422,7 @@ view_logs() {
         echo ""
         echo "Available AppImages with logs:"
         for desktop_file in "$update_dir"/*.desktop; do
-            if [ -f "$desktop_file" ] && grep -q "\.AppImage" "$desktop_file" 2>/dev/null; then
+            if [ -f "$desktop_file" ] && grep -q "\.[Aa]pp[Ii]mage" "$desktop_file" 2>/dev/null; then
                 name=$(grep "^Name=" "$desktop_file" | cut -d'=' -f2)
                 base_name=$(basename "$desktop_file" .desktop)
                 log_file="$logs_dir/${base_name}.log"
@@ -319,7 +437,7 @@ view_logs() {
     # Find the AppImage (case-insensitive)
     local found=false
     for desktop_file in "$update_dir"/*.desktop; do
-        if [ -f "$desktop_file" ] && grep -q "\.AppImage" "$desktop_file" 2>/dev/null; then
+        if [ -f "$desktop_file" ] && grep -q "\.[Aa]pp[Ii]mage" "$desktop_file" 2>/dev/null; then
             name=$(grep "^Name=" "$desktop_file" | cut -d'=' -f2)
             # Case-insensitive comparison
             if [[ "${name,,}" == *"${app_name,,}"* ]]; then
@@ -357,7 +475,7 @@ run_appimage() {
         echo ""
         echo "Available AppImages:"
         for desktop_file in "$update_dir"/*.desktop; do
-            if [ -f "$desktop_file" ] && grep -q "\.AppImage" "$desktop_file" 2>/dev/null; then
+            if [ -f "$desktop_file" ] && grep -q "\.[Aa]pp[Ii]mage" "$desktop_file" 2>/dev/null; then
                 name=$(grep "^Name=" "$desktop_file" | cut -d'=' -f2)
                 echo "  - $name"
             fi
@@ -367,7 +485,7 @@ run_appimage() {
     
     # Find the AppImage (case-insensitive)
     for desktop_file in "$update_dir"/*.desktop; do
-        if [ -f "$desktop_file" ] && grep -q "\.AppImage" "$desktop_file" 2>/dev/null; then
+        if [ -f "$desktop_file" ] && grep -q "\.[Aa]pp[Ii]mage" "$desktop_file" 2>/dev/null; then
             name=$(grep "^Name=" "$desktop_file" | cut -d'=' -f2)
             if [[ "${name,,}" == *"${app_name,,}"* ]]; then
                 exec_line=$(grep "^Exec=" "$desktop_file" | cut -d'=' -f2)
@@ -393,7 +511,7 @@ debug_appimage() {
         echo ""
         echo "Available AppImages:"
         for desktop_file in "$update_dir"/*.desktop; do
-            if [ -f "$desktop_file" ] && grep -q "\.AppImage" "$desktop_file" 2>/dev/null; then
+            if [ -f "$desktop_file" ] && grep -q "\.[Aa]pp[Ii]mage" "$desktop_file" 2>/dev/null; then
                 name=$(grep "^Name=" "$desktop_file" | cut -d'=' -f2)
                 echo "  - $name"
             fi
@@ -403,7 +521,7 @@ debug_appimage() {
     
     # Find the AppImage (case-insensitive)
     for desktop_file in "$update_dir"/*.desktop; do
-        if [ -f "$desktop_file" ] && grep -q "\.AppImage" "$desktop_file" 2>/dev/null; then
+        if [ -f "$desktop_file" ] && grep -q "\.[Aa]pp[Ii]mage" "$desktop_file" 2>/dev/null; then
             name=$(grep "^Name=" "$desktop_file" | cut -d'=' -f2)
             if [[ "${name,,}" == *"${app_name,,}"* ]]; then
                 exec_line=$(grep "^Exec=" "$desktop_file" | cut -d'=' -f2-)
@@ -482,6 +600,24 @@ debug_appimage() {
 }
 
 # Create logging wrapper script
+# Log rotation function
+rotate_log_if_needed() {
+    local log_file="$1"
+    local max_size=$((10 * 1024 * 1024)) # 10MB
+    
+    if [[ -f "$log_file" ]] && [[ $(stat -c%s "$log_file" 2>/dev/null || echo 0) -gt $max_size ]]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Rotating log file (exceeded ${max_size} bytes)" >> "$log_file"
+        
+        # Keep last 1000 lines
+        if command -v tail >/dev/null 2>&1; then
+            mv "$log_file" "${log_file}.old"
+            tail -n 1000 "${log_file}.old" > "$log_file" 2>/dev/null || touch "$log_file"
+            rm -f "${log_file}.old"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Log rotated - kept last 1000 lines" >> "$log_file"
+        fi
+    fi
+}
+
 create_logging_wrapper() {
     local wrapper_dir="$HOME/.config/appimage_desktop_integrator/bin"
     local wrapper_script="$wrapper_dir/appimage-run-wrapper.sh"
@@ -495,12 +631,38 @@ create_logging_wrapper() {
 # Get the AppImage path and name
 APPIMAGE_PATH="$1"
 shift
-APPIMAGE_NAME=$(basename "$APPIMAGE_PATH" .AppImage)
+APPIMAGE_NAME=$(basename "$APPIMAGE_PATH" | sed 's/\.[Aa]pp[Ii]mage$//')
 
 # Set up logging
 LOGS_DIR="$HOME/.config/appimage_desktop_integrator/logs"
 mkdir -p "$LOGS_DIR"
 LOG_FILE="$LOGS_DIR/${APPIMAGE_NAME}.log"
+
+# Log rotation function
+rotate_log_if_needed() {
+    local log_file="$1"
+    local max_size=$((10 * 1024 * 1024)) # 10MB
+    
+    if [[ -f "$log_file" ]] && [[ $(stat -c%s "$log_file" 2>/dev/null || echo 0) -gt $max_size ]]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Rotating log file (exceeded ${max_size} bytes)" >> "$log_file"
+        
+        # Keep last 1000 lines
+        if command -v tail >/dev/null 2>&1; then
+            mv "$log_file" "${log_file}.old"
+            tail -n 1000 "${log_file}.old" > "$log_file" 2>/dev/null || touch "$log_file"
+            rm -f "${log_file}.old"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Log rotated - kept last 1000 lines" >> "$log_file"
+        fi
+    fi
+}
+
+# Check for no-logging mode
+if [[ "${APPIMAGE_NO_LOG}" == "1" ]]; then
+    exec "$APPIMAGE_PATH" "$@"
+fi
+
+# Rotate log if needed before writing
+rotate_log_if_needed "$LOG_FILE"
 
 # Check for debug mode
 if [ "$APPIMAGE_DEBUG" = "1" ] || [ "$APPIMAGE_VERBOSE" = "1" ]; then
@@ -533,136 +695,13 @@ EOL
 }
 
 # Upgrade existing installations to use logging
-upgrade_to_v2() {
-    echo "Upgrading AppImage Integrator to version 2.0"
-    echo "==========================================="
-    echo ""
-    echo "This upgrade will:"
-    echo "  - Add logging support to all integrated AppImages"
-    echo "  - Enable case-insensitive search in commands"
-    echo "  - Add new 'run' command for live output"
-    echo ""
-    
-    read -p "Continue with upgrade? (y/n): " confirm
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        echo "Upgrade cancelled."
-        return
-    fi
-    
-    # Create logging wrapper
-    wrapper_script=$(create_logging_wrapper)
-    
-    # Verify wrapper is executable
-    if [ ! -x "$wrapper_script" ]; then
-        echo "Error: Failed to create executable wrapper script"
-        return 1
-    fi
-    
-    # Update all existing desktop files
-    local updated=0
-    local failed=0
-    for desktop_file in "$update_dir"/*.desktop; do
-        if [ -f "$desktop_file" ] && grep -q "\.AppImage" "$desktop_file" 2>/dev/null; then
-            # Skip if already using wrapper
-            if grep -q "appimage-run-wrapper.sh" "$desktop_file" 2>/dev/null; then
-                continue
-            fi
-            
-            # Get current exec line
-            exec_line=$(grep "^Exec=" "$desktop_file" | cut -d'=' -f2)
-            
-            # Skip if no valid exec line
-            if [ -z "$exec_line" ]; then
-                echo "  ⚠ Skipping $(basename "$desktop_file"): No Exec line found"
-                ((failed++))
-                continue
-            fi
-            
-            # Backup desktop file
-            cp "$desktop_file" "${desktop_file}.backup" 2>/dev/null
-            
-            # Update to use wrapper
-            new_exec="\"$wrapper_script\" $exec_line"
-            if sed -i "s|^Exec=.*|Exec=$new_exec|" "$desktop_file" 2>/dev/null; then
-                # Add upgrade marker
-                if ! grep -q "Upgraded to v2" "$desktop_file"; then
-                    # Remove existing comment line and add new one
-                    sed -i '/^Comment=/d' "$desktop_file"
-                    echo "Comment=Generated by AppImage Integrator; Upgraded to v2" >> "$desktop_file"
-                fi
-                
-                ((updated++))
-                name=$(grep "^Name=" "$desktop_file" | cut -d'=' -f2)
-                echo "  ✓ Updated $name"
-                
-                # Remove backup on success
-                rm -f "${desktop_file}.backup"
-            else
-                echo "  ✗ Failed to update $(basename "$desktop_file")"
-                # Restore backup
-                mv "${desktop_file}.backup" "$desktop_file" 2>/dev/null
-                ((failed++))
-            fi
-        fi
-    done
-    
-    # Update version file
-    mkdir -p "$HOME/.config/appimage_desktop_integrator"
-    echo "$CURRENT_VERSION" > "$HOME/.config/appimage_desktop_integrator/VERSION"
-    
-    echo ""
-    if [ $failed -gt 0 ]; then
-        echo "Upgrade completed with warnings: Updated $updated AppImages, $failed failed."
-        echo "Failed entries may need manual intervention."
-    else
-        echo "Upgrade complete! Updated $updated AppImages."
-    fi
-    echo ""
-    echo "New features available:"
-    echo "  - 'ai logs <name>' - View stored logs"
-    echo "  - 'ai run <name>' - Run with live output"
-    echo "  - Case-insensitive search in all commands"
-}
+# Upgrade function removed - users should reinstall for updates
 
 # Check for version and upgrade if needed
 check_version_upgrade() {
-    local version_file="$HOME/.config/appimage_desktop_integrator/VERSION"
-    local installed_version="1.0.0"
-    
-    # Read version file, default to 1.0.0 if not found or empty
-    if [ -f "$version_file" ] && [ -s "$version_file" ]; then
-        installed_version=$(cat "$version_file" 2>/dev/null || echo "1.0.0")
-    fi
-    
-    # Validate version format (basic check)
-    if ! [[ "$installed_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        echo "Warning: Invalid version format in VERSION file, assuming 1.0.0"
-        installed_version="1.0.0"
-    fi
-    
-    # Compare versions
-    if [ "$installed_version" != "$CURRENT_VERSION" ]; then
-        # Extract version components
-        local installed_major=$(echo "$installed_version" | cut -d'.' -f1)
-        local current_major=$(echo "$CURRENT_VERSION" | cut -d'.' -f1)
-        
-        # Ensure numeric comparison
-        installed_major=${installed_major:-0}
-        current_major=${current_major:-0}
-        
-        if [ "$current_major" -gt "$installed_major" ]; then
-            # Check if wrapper already exists (partial upgrade)
-            if [ -f "$HOME/.config/appimage_desktop_integrator/bin/appimage-run-wrapper.sh" ]; then
-                echo "Note: Logging wrapper already exists, checking desktop entries..."
-            fi
-            echo "Major version upgrade available!"
-            upgrade_to_v2
-        else
-            # Just update version file for minor updates
-            mkdir -p "$HOME/.config/appimage_desktop_integrator"
-            echo "$CURRENT_VERSION" > "$version_file"
-        fi
-    fi
+    # Ensure CURRENT_VERSION is set
+    CURRENT_VERSION=$(get_current_version)
+    # No upgrade checking needed - embedded version is authoritative
 }
 
 # Simpler command structure
@@ -694,8 +733,45 @@ show_simple_help() {
 # Clean AppImage name
 clean_appimage_name() {
     local name="$1"
-    local original_name="${name%%[^a-zA-Z]*}"
-    # Simplified cleaning - cut everything after the first non alphabetic character
+    
+    # Remove common file extensions first
+    name="${name%%.AppImage}"
+    name="${name%%.appimage}"
+    name="${name%%.APPIMAGE}"
+    
+    # Remove version patterns and platform indicators
+    # Strip version numbers like v1.2.3, 1.2.3, 2024-01-01
+    name=$(echo "$name" | sed -E 's/[-_]v?[0-9]+(\.[0-9]+)*(\.[0-9]+)?.*$//')
+    # Strip platform indicators
+    name=$(echo "$name" | sed -E 's/[-_](linux|x86_64|amd64|i386|arm64|armhf).*$//')
+    # Strip date patterns
+    name=$(echo "$name" | sed -E 's/[-_][0-9]{4}[-_][0-9]{2}[-_][0-9]{2}.*$//')
+    # Strip git hash patterns
+    name=$(echo "$name" | sed -E 's/[-_]git[-_][a-f0-9]{7,}.*$//')
+    
+    # Extract clean name - letters, numbers, and common separators
+    local cleaned=$(echo "$name" | sed -E 's/^[^a-zA-Z0-9]*//; s/[^a-zA-Z0-9]*$//; s/[-_]+/ /g')
+    
+    # Capitalize first letter of each word
+    local original_name=""
+    for word in $cleaned; do
+        if [ -n "$original_name" ]; then
+            original_name="$original_name "
+        fi
+        original_name="$original_name$(echo "${word:0:1}" | tr '[:lower:]' '[:upper:]')${word:1}"
+    done
+    
+    # Fallback to first alphabetic sequence if cleaning failed
+    if [ -z "$original_name" ]; then
+        original_name="${name%%[^a-zA-Z]*}"
+    fi
+    
+    # Ensure we have something
+    if [ -z "$original_name" ]; then
+        original_name="AppImage"
+    fi
+    
+    # Ask user for confirmation with improved suggestion
     read -p "Use the name [$original_name]? (y/n): " confirm
     if [[ "$confirm" =~ ^[Nn]$ ]]; then
         read -p "Enter a custom name for the AppImage: " name
@@ -724,6 +800,111 @@ is_electron_app() {
 }
 
 # Process AppImage (main integration function)
+# Cleanup function for AppImage mounts and temp files
+cleanup_appimage_mount() {
+    local mount_pid="$1"
+    local mount_point="$2"
+    
+    # Kill the mount process if still running
+    if kill "$mount_pid" 2>/dev/null; then
+        sleep 0.5
+        # Ensure it's properly unmounted
+        if [ -n "$mount_point" ] && mountpoint -q "$mount_point" 2>/dev/null; then
+            fusermount -u "$mount_point" 2>/dev/null || fusermount3 -u "$mount_point" 2>/dev/null || true
+        fi
+    fi
+    
+    # Clean up temporary files
+    rm -f /tmp/mount_output.txt /tmp/appimage_test.txt
+}
+
+# Error handling function
+handle_error() {
+    local exit_code=$1
+    local message="$2"
+    local line_no="$3"
+    
+    echo "Error on line $line_no: $message (exit code: $exit_code)" >&2
+    
+    # Log error if we have access to logging
+    if [ -n "$HOME" ]; then
+        local error_log="$HOME/.config/appimage_desktop_integrator/errors.log"
+        mkdir -p "$(dirname "$error_log")"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Error: $message (line $line_no, exit $exit_code)" >> "$error_log"
+    fi
+    
+    # Cleanup any partial operations
+    cleanup_on_exit
+}
+
+# Global cleanup function
+cleanup_on_exit() {
+    local exit_code=$?
+    
+    # Clean up any AppImage mounts
+    if [ -n "$MOUNT_PID" ]; then
+        cleanup_appimage_mount "$MOUNT_PID" "$MOUNT_POINT"
+    fi
+    
+    # Remove any temporary directories
+    if [ -n "$TEMP_DIR" ] && [ -d "$TEMP_DIR" ]; then
+        rm -rf "$TEMP_DIR"
+    fi
+    
+    # Clean up any temporary files with our pattern
+    rm -f /tmp/appimage_*.txt /tmp/mount_output.txt 2>/dev/null
+    
+    # Only exit if this is being called as an exit handler
+    if [ "${BASH_SUBSHELL}" = "0" ]; then
+        exit $exit_code
+    fi
+}
+
+# Set up cleanup trap
+trap cleanup_on_exit EXIT INT TERM
+
+# Atomic desktop file update function
+update_desktop_file_atomic() {
+    local desktop_path="$1"
+    local app_name="$2"
+    local exec_command="$3"
+    local icon_path="$4"
+    local version="$5"
+    local categories="$6"
+    
+    local temp_file="${desktop_path}.tmp"
+    
+    # Create new desktop file in temporary location
+    cat > "$temp_file" <<EOF
+[Desktop Entry]
+Name=$app_name
+Exec=$exec_command
+Icon=$icon_path
+Type=Application
+Version=$version
+Categories=$categories
+Comment=Generated by AppImage Integrator
+EOF
+    
+    # Verify the temp file was created successfully
+    if [ -f "$temp_file" ] && [ -s "$temp_file" ]; then
+        # Atomic replace - this is atomic on most filesystems
+        if mv "$temp_file" "$desktop_path" 2>/dev/null; then
+            # Update desktop database
+            update-desktop-database "$update_dir" 2>/dev/null
+            return 0
+        else
+            # Cleanup on failure
+            rm -f "$temp_file"
+            return 1
+        fi
+    else
+        # Cleanup on failure
+        rm -f "$temp_file"
+        return 1
+    fi
+}
+
 process_appimage() {
     local APPIMAGE_PATH="$1"
     local USE_LOGGING="${2:-true}"  # Default to using logging
@@ -775,7 +956,7 @@ process_appimage() {
     ICON=$(find "$MOUNT_POINT" -name '*.png' -o -name '*.svg' | grep -E '(256|128|64|48|icon)' | head -1)
     [ -z "$ICON" ] && ICON=$(find "$MOUNT_POINT" -name '*.png' -o -name '*.svg' | head -1)
     
-    APP_NAME=$(clean_appimage_name "$(basename "$APPIMAGE_PATH" .AppImage)")
+    APP_NAME=$(clean_appimage_name "$(basename "$APPIMAGE_PATH" | sed 's/\.[Aa]pp[Ii]mage$//')")
     CATEGORIES=$(grep 'Categories=' "$MOUNT_POINT"/*.desktop 2>/dev/null | cut -d '=' -f2 | head -1)
     [ -z "$CATEGORIES" ] && CATEGORIES="Utility;Application;"
     
@@ -789,26 +970,107 @@ process_appimage() {
     fi
     
     # Create desktop entry
-    DESKTOP_FILE="$(basename "$APPIMAGE_PATH" .AppImage).desktop"
+    DESKTOP_FILE="$(basename "$APPIMAGE_PATH" | sed 's/\.[Aa]pp[Ii]mage$//')".desktop
     DESKTOP_PATH="$update_dir/$DESKTOP_FILE"
     
-    cat > "$DESKTOP_PATH" <<EOL
-[Desktop Entry]
-Name=$APP_NAME
-Exec=$EXEC_COMMAND
-Icon=$ICON_PATH
-Type=Application
-Version=$VERSION
-Categories=$CATEGORIES
-Comment=Generated by AppImage Integrator
-EOL
+    # Use atomic desktop file update
+    if ! update_desktop_file_atomic "$DESKTOP_PATH" "$APP_NAME" "$EXEC_COMMAND" "$ICON_PATH" "$VERSION" "$CATEGORIES"; then
+        echo "Error: Failed to create desktop file $DESKTOP_PATH" >&2
+        return 1
+    fi
     
-    # Cleanup
-    kill $MOUNT_PID 2>/dev/null
-    rm -f /tmp/mount_output.txt /tmp/appimage_test.txt
+    # Cleanup mount and temporary files
+    cleanup_appimage_mount "$MOUNT_PID" "$MOUNT_POINT"
     
     echo "✓ Integrated $APP_NAME successfully!"
-    update-desktop-database "$update_dir" 2>/dev/null
+}
+
+# Intelligent removal function with fuzzy matching
+intelligent_remove_appimage() {
+    local search_term="$1"
+    local matches=()
+    local names=()
+    local desktop_files=()
+    
+    # Find all possible matches (case-insensitive)
+    for desktop_file in "$update_dir"/*.desktop; do
+        if [ -f "$desktop_file" ] && grep -q "\.[Aa]pp[Ii]mage" "$desktop_file" 2>/dev/null; then
+            name=$(grep "^Name=" "$desktop_file" | cut -d'=' -f2)
+            # Case-insensitive matching with multiple criteria
+            if [[ "${name,,}" == *"${search_term,,}"* ]] || \
+               [[ "${name,,}" == "${search_term,,}" ]] || \
+               [[ "$(basename "$desktop_file" .desktop | tr '[:upper:]' '[:lower:]')" == *"${search_term,,}"* ]]; then
+                matches+=("$name")
+                names+=("$name")
+                desktop_files+=("$desktop_file")
+            fi
+        fi
+    done
+    
+    # Handle results
+    case ${#matches[@]} in
+        0)
+            echo "No AppImage found matching: $search_term"
+            echo ""
+            echo "Did you mean one of these?"
+            for desktop_file in "$update_dir"/*.desktop; do
+                if [ -f "$desktop_file" ] && grep -q "\.[Aa]pp[Ii]mage" "$desktop_file" 2>/dev/null; then
+                    name=$(grep "^Name=" "$desktop_file" | cut -d'=' -f2)
+                    echo "  - $name"
+                fi
+            done
+            return 1
+            ;;
+        1)
+            # Exact match - proceed with removal
+            remove_appimage_integration "${desktop_files[0]}" "${names[0]}"
+            ;;
+        *)
+            # Multiple matches - ask user to choose
+            echo "Multiple AppImages match '$search_term':"
+            echo ""
+            for i in "${!matches[@]}"; do
+                echo "  $((i+1))) ${matches[i]}"
+            done
+            echo "  0) Cancel"
+            echo ""
+            read -p "Which one would you like to remove? (1-${#matches[@]}, 0 to cancel): " choice
+            
+            if [[ "$choice" =~ ^[1-9][0-9]*$ ]] && [ "$choice" -le "${#matches[@]}" ]; then
+                local idx=$((choice-1))
+                remove_appimage_integration "${desktop_files[idx]}" "${names[idx]}"
+            elif [ "$choice" = "0" ]; then
+                echo "Removal cancelled."
+            else
+                echo "Invalid choice. Removal cancelled."
+            fi
+            ;;
+    esac
+}
+
+# Function to actually remove the AppImage integration
+remove_appimage_integration() {
+    local desktop_file="$1"
+    local name="$2"
+    
+    echo "Found: $name"
+    read -p "Remove this AppImage integration? (y/n): " confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        # Get icon path and remove it
+        icon_path=$(grep "^Icon=" "$desktop_file" | cut -d'=' -f2)
+        if [ -f "$icon_path" ] && [[ "$icon_path" == *"appimage-integrator"* || "$icon_path" == *"/icons/"* ]]; then
+            rm -f "$icon_path"
+        fi
+        
+        # Remove desktop entry
+        rm -f "$desktop_file"
+        echo "✓ Removed $name integration"
+        
+        # Update desktop database
+        update-desktop-database "$update_dir" 2>/dev/null
+    else
+        echo "Removal cancelled."
+    fi
 }
 
 # Main command handling
@@ -850,43 +1112,14 @@ case "${1:-help}" in
             echo ""
             echo "Available AppImages:"
             for desktop_file in "$update_dir"/*.desktop; do
-                if [ -f "$desktop_file" ] && grep -q "\.AppImage" "$desktop_file" 2>/dev/null; then
+                if [ -f "$desktop_file" ] && grep -q "\.[Aa]pp[Ii]mage" "$desktop_file" 2>/dev/null; then
                     name=$(grep "^Name=" "$desktop_file" | cut -d'=' -f2)
                     echo "  - $name"
                 fi
             done
         else
-            # Remove AppImage integration
-            found=false
-            for desktop_file in "$update_dir"/*.desktop; do
-                if [ -f "$desktop_file" ] && grep -q "\.AppImage" "$desktop_file" 2>/dev/null; then
-                    name=$(grep "^Name=" "$desktop_file" | cut -d'=' -f2)
-                    if [[ "$name" == *"$2"* ]]; then
-                        found=true
-                        echo "Found: $name"
-                        read -p "Remove this AppImage integration? (y/n): " confirm
-                        if [[ "$confirm" =~ ^[Yy]$ ]]; then
-                            # Get icon path and remove it
-                            icon_path=$(grep "^Icon=" "$desktop_file" | cut -d'=' -f2)
-                            if [ -f "$icon_path" ] && [[ "$icon_path" == *"appimage-integrator"* || "$icon_path" == *"/icons/"* ]]; then
-                                rm -f "$icon_path"
-                            fi
-                            
-                            # Remove desktop entry
-                            rm -f "$desktop_file"
-                            echo "✓ Removed $name integration"
-                            
-                            # Update desktop database
-                            update-desktop-database "$update_dir" 2>/dev/null
-                        fi
-                        break
-                    fi
-                fi
-            done
-            
-            if [ "$found" = false ]; then
-                echo "No AppImage found matching: $2"
-            fi
+            # Use intelligent removal function
+            intelligent_remove_appimage "$2"
         fi
         ;;
     update)
@@ -911,12 +1144,21 @@ case "${1:-help}" in
         init_minimal_config
         show_desktop_files
         ;;
+    --version|-v)
+        CURRENT_VERSION=$(get_current_version)
+        echo "AppImage Integrator v$CURRENT_VERSION"
+        echo "Enhanced with security improvements, case-insensitive support, and atomic operations"
+        ;;
+    --dry-run)
+        echo "Dry run mode - would execute: $*"
+        echo "Note: Dry run functionality not fully implemented yet"
+        ;;
     help|-h|--help|"")
         show_simple_help
         ;;
     *)
         # If it's a .AppImage file, install it
-        if [[ "$1" == *.AppImage ]] && [ -f "$1" ]; then
+        if [[ "${1,,}" == *.appimage ]] && [ -f "$1" ]; then
             init_minimal_config
             install_single_appimage "$1"
         else

@@ -1,5 +1,36 @@
 # Changelog
 
+## [2.1.0] - 2025-01-28
+
+### Added
+
+- **Intelligent Remove**: Enhanced `ai remove` command with fuzzy matching, case-insensitive search, and multiple match handling
+- **Smart Suggestions**: When no matches found, shows "Did you mean..." suggestions with available AppImages
+- **Multiple Match Selection**: When multiple AppImages match, presents numbered list for user selection
+- **Embedded Versioning**: Version is now injected during installation for reliable version reporting
+
+### Fixed
+
+- **Critical: Atomic File Operations**: Fixed major bug where AppImages would be moved before processing validation, causing orphaned files when integration failed
+- **Config Parsing**: Resolved subshell variable scope issues that prevented custom directory arrays from working properly
+- **Process Substitution**: Fixed config parsing to work correctly in all execution contexts (test environments, wrapper scripts)
+- **Variable Scoping**: Fixed local variable persistence issues in config parsing functions
+- **Version Detection**: Simplified and hardened version detection system
+
+### Changed
+
+- **File Movement Logic**: AppImages are now processed in original location first, then moved only on success
+- **Remove Workflow**: Complete overhaul of removal command with intelligent matching algorithms  
+- **Version System**: Removed redundant config version files, using single embedded version as source of truth
+- **Error Recovery**: Improved error handling with proper cleanup when operations fail
+
+### Technical Improvements
+
+- **Robust Config Processing**: Process substitution eliminates subshell variable persistence issues
+- **Conditional Debug Output**: Debug output only when `APPIMAGE_INTEGRATOR_DEBUG=1` is set
+- **Better Array Handling**: Fixed xargs mangling of array strings with proper parameter expansion
+- **Atomic Desktop Updates**: Desktop file operations are now atomic with proper rollback
+
 ## [2.0.2] - 2025-07-24
 
 ### Added

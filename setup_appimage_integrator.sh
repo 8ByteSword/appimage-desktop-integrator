@@ -31,8 +31,15 @@ install_appimage_integrator() {
     # Create config directory
     mkdir -p "$HOME/.config/appimage_desktop_integrator"
     
-    # Install main script
-    sudo cp "$script_dir/install_appimages.sh" /usr/local/bin/install_appimages
+    # Install main script with version injection
+    current_version=$(cat "$script_dir/VERSION" 2>/dev/null || echo "2.1.0")
+    
+    # Create temporary script with embedded version
+    temp_script="/tmp/install_appimages_$$.sh"
+    sed "s/__VERSION_PLACEHOLDER__/$current_version/g" "$script_dir/install_appimages.sh" > "$temp_script"
+    
+    # Install the version-injected script
+    sudo mv "$temp_script" /usr/local/bin/install_appimages
     sudo chmod +x /usr/local/bin/install_appimages
     
     # Create simple 'ai' alias
@@ -42,8 +49,7 @@ install_appimage_integrator() {
     sudo cp "$script_dir/setup_appimage_integrator.sh" /usr/local/bin/setup_appimage_integrator
     sudo chmod +x /usr/local/bin/setup_appimage_integrator
     
-    # Save version
-    cp "$script_dir/VERSION" "$HOME/.config/appimage_desktop_integrator/VERSION"
+    # Version is now embedded in script - no config file needed
     
     # Install bash completion
     if [ -f "$script_dir/ai-completion.bash" ]; then
@@ -59,14 +65,33 @@ install_appimage_integrator() {
     if [ ! -f "$HOME/.config/appimage_desktop_integrator/config.ini" ]; then
         # Check for old config in current directory
         if [ -f "$script_dir/config.ini" ]; then
-            echo "Found existing config, migrating..."
-            cp "$script_dir/config.ini" "$HOME/.config/appimage_desktop_integrator/config.ini"
+            echo "Found existing config, migrating and expanding paths..."
             
-            # Update old config format
-            sed -i 's/^appimages_dir=/# Legacy single directory\n# appimages_dir=/' "$HOME/.config/appimage_desktop_integrator/config.ini"
-            echo "" >> "$HOME/.config/appimage_desktop_integrator/config.ini"
-            echo "# Multiple directories supported (array format)" >> "$HOME/.config/appimage_desktop_integrator/config.ini"
-            echo "appimages_dirs=(\"\$HOME/Applications\" \"\$HOME/AppImages\" \"\$HOME/apps\")" >> "$HOME/.config/appimage_desktop_integrator/config.ini"
+            # Read the config and expand any ~ or $HOME references
+            while IFS='=' read -r key value; do
+                # Skip comments and empty lines
+                [[ "$key" =~ ^[[:space:]]*# ]] && continue
+                [[ -z "$key" ]] && continue
+                
+                # Expand ~ to $HOME in the value
+                expanded_value="${value//\~/$HOME}"
+                # Also evaluate any $HOME references
+                expanded_value=$(eval echo "$expanded_value")
+                
+                # Write to new config with expanded paths
+                echo "${key}=${expanded_value}" >> "$HOME/.config/appimage_desktop_integrator/config.ini.tmp"
+            done < "$script_dir/config.ini"
+            
+            # Move the temporary file to the final location
+            mv "$HOME/.config/appimage_desktop_integrator/config.ini.tmp" "$HOME/.config/appimage_desktop_integrator/config.ini"
+            
+            # Update old config format if needed
+            if grep -q "^appimages_dir=" "$HOME/.config/appimage_desktop_integrator/config.ini"; then
+                sed -i 's/^appimages_dir=/# Legacy single directory\n# appimages_dir=/' "$HOME/.config/appimage_desktop_integrator/config.ini"
+                echo "" >> "$HOME/.config/appimage_desktop_integrator/config.ini"
+                echo "# Multiple directories supported (array format)" >> "$HOME/.config/appimage_desktop_integrator/config.ini"
+                echo "appimages_dirs=(\"$HOME/Applications\" \"$HOME/AppImages\" \"$HOME/apps\")" >> "$HOME/.config/appimage_desktop_integrator/config.ini"
+            fi
         else
             cat > "$HOME/.config/appimage_desktop_integrator/config.ini" <<EOL
 # AppImage Integrator Configuration
